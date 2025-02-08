@@ -98,7 +98,7 @@ for i, (context, question) in enumerate(questions):
         output_text = outputs[0]["generated_text"]
   
         rewritten.setdefault(url, [])
-        rewritten[url].append(output_text[-1]["content"])
+        rewritten[url].append((output_text[-1]["content"], a))
 
     if(i % 10 == 0):
         with open(f"{question_file}_rewritten.pickle", "wb") as fp:

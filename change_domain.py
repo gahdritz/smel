@@ -9,10 +9,11 @@ from transformers import (
     BitsAndBytesConfig,
 )
 
+from constants import DOMAINS
 from few_shot_examples import FEW_SHOT_EXAMPLES
 
-
-QUESTION_FILE = "questions_filtered.pickle"
+PICKLE_DIR = "pickles"
+QUESTION_FILE = "gov_questions.pickle"
 USE_CONTEXT = True
 FEW_SHOT = True
 FEW_SHOT_K = 2
@@ -34,19 +35,7 @@ pipeline = transformers.pipeline(
     device_map="auto",
 )
 
-DOMAINS = [
-    ("Wikipedia", "https://wikipedia.com"),
-    ("Reddit", "https://reddit.com"),
-    ("The New York Times", "https://nytimes.com"),
-    ("Encyclopedia Britannica", "https://britannica.com"), 
-    ("a casual bodybuilding forum", "https://bodybuilding.com"),
-    ("a 4chan greentext with an irreverent punchline", "https://4chan.com"),
-    ("a mediocre, semi-fictional short story", "https://medium.com"),
-    ("Twitter", "https://twitter.com"),
-    ("a rambling, low quality document that changes topic at random", "unknown"),
-]
-
-with open(QUESTION_FILE, "rb") as fp:
+with open(os.path.join(PICKLE_DIR, QUESTION_FILE), "rb") as fp:
     questions = pickle.load(fp)
 
 start_point = 0
@@ -54,7 +43,7 @@ rewritten = {}
 
 question_file = os.path.basename(QUESTION_FILE).rsplit('.', 1)[0]
 if(RESUME):
-    with open(f"{question_file}_rewritten.pickle", "rb") as fp:
+    with open(os.path.join(PICKLE_DIR, f"{question_file}_rewritten.pickle"), "rb") as fp:
         rewritten = pickle.load(fp)
 
     start_point = len(rewritten[list(rewritten.keys())[0]])
@@ -79,9 +68,11 @@ for i, (context, question) in enumerate(questions):
         ]
 
         user_message = {"role": "user", "content": f"Source: {description}\nURL: {url}\n"}
-        if(FEW_SHOT):
-            if(not url in FEW_SHOT_EXAMPLES):
-                continue
+        if(FEW_SHOT and url in FEW_SHOT_EXAMPLES):
+
+#        if(FEW_SHOT):
+#            if(not url in FEW_SHOT_EXAMPLES):
+#                continue
             
             fses = [c for c, _ in FEW_SHOT_EXAMPLES[url][:FEW_SHOT_K]]
             for j, fse in enumerate(fses):
@@ -96,14 +87,17 @@ for i, (context, question) in enumerate(questions):
             max_new_tokens=512,
         )
         output_text = outputs[0]["generated_text"]
-  
+ 
+        print(output_text[-1]["content"])
+        exit()
+
         rewritten.setdefault(url, [])
         rewritten[url].append((output_text[-1]["content"], a))
 
     if(i % 10 == 0):
-        with open(f"{question_file}_rewritten.pickle", "wb") as fp:
+        with open(os.path.join(PICKLE_DIR, f"{question_file}_rewritten.pickle"), "wb") as fp:
             pickle.dump(rewritten, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
-with open(f"{question_file}_rewritten.pickle", "wb") as fp:
+with open(os.path.join(PICKLE_DIR, f"{question_file}_rewritten.pickle"), "wb") as fp:
     pickle.dump(rewritten, fp, protocol=pickle.HIGHEST_PROTOCOL)
 

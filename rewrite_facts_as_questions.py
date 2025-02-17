@@ -36,7 +36,7 @@ for i, f in enumerate(facts):
         sentence_level = []
         for k, fact in enumerate(fact_list):
             messages = [
-                {"role": "system", "content": "You are a bot that rewrites sentences as question/answer pairs. Do not write anything but the question and answer. Do not include any information not present in the sentence or the provided context. If the question contains ambiguous pronouns or is otherwise vague, use the context to clarify it. Always use full names in questions. In other words, make sure that each question has a unique answer, such that someone knowledgeable about the topic could understand and answer it without access to the context."},
+                {"role": "system", "content": "You are a bot that rewrites sentences as question/answer pairs. Do not write anything but the question and answer. The answer should be a full sentence. Do not include any information not present in the sentence or the provided context. If the question contains ambiguous pronouns or is otherwise vague, use the context to clarify it. Always use full names in questions. In other words, make sure that each question has a unique answer, such that someone knowledgeable about the topic could understand and answer it without access to the context."},
                 {"role": "user", "content": f"Context: {context}.\nSentence: {fact}"}
             ]
             
@@ -48,6 +48,7 @@ for i, f in enumerate(facts):
             output_text = outputs[0]["generated_text"]
 
             sentence_level.append(output_text[-1]["content"])
+
             print(sentence_level[-1])
 
         doc_level.append(sentence_level)

@@ -6,6 +6,7 @@ import pickle
 import random
 
 import matplotlib.pyplot as plt
+import openai
 import torch
 import transformers
 from transformers import (
@@ -21,10 +22,10 @@ from constants import (
 )
 
 
-QUESTION_FILE = "questions_filtered.pickle"
+QUESTION_FILE = "gov_questions_filtered.pickle"
 CONTEXT_FILES = [
-    "questions_filtered_rewritten.pickle",
-    "questions_filtered_questions_filtered_rewritten_corrupted.pickle",
+    "gov_questions_filtered_rewritten.pickle",
+    "gov_questions_filtered_gov_questions_filtered_rewritten_corrupted.pickle",
 ]
 
 C4_JSONL = None
@@ -33,10 +34,16 @@ NO_C4_DOCUMENTS = 15 - len(CONTEXT_FILES)
 USE_CONTEXT = True
 FIG_DIR = "results"
 PICKLE_DIR = "pickles"
+MODEL = "o3-mini"
+
+openai_client = None
+if(MODEL == "o3-mini"):
+    openai_client = OpenAI(
+        ***REMOVED***
+    )
 
 os.makedirs(FIG_DIR, exist_ok=True)
 os.makedirs(PICKLE_DIR, exist_ok=True)
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--combo_id", type=int, default=0)
@@ -66,16 +73,17 @@ pipeline = transformers.pipeline(
     device_map="auto",
 )
 
-with open(QUESTION_FILE, "rb") as fp:
+with open(os.path.join(PICKLE_DIR, QUESTION_FILE), "rb") as fp:
     questions = pickle.load(fp)
 
 context_files = []
 for context_file, context_key in zip(CONTEXT_FILES, context_keys):
-    with open(context_file, "rb") as fp:
+    with open(os.path.join(PICKLE_DIR, context_file), "rb") as fp:
         d = pickle.load(fp)
         print(d.keys())
         print(context_file)
         contexts = d[context_key]
+        
         assert(len(contexts) == len(questions))
         context_files.append(contexts)
 
@@ -136,17 +144,35 @@ for i, (_, question) in enumerate(questions):
             {"role": "user", "content": f"{context_string}\nQuestion: {q}"}
         ]
 
-    outputs = pipeline(
-        messages,
-#        temperature=0.,
-        temperature=None,
-        top_p=None,
-        do_sample=False,
-        max_new_tokens=256,
-    )
-    output_text = outputs[0]["generated_text"]
+    if(MODEL == "llama"):
+        outputs = pipeline(
+            messages,
+    #        temperature=0.,
+            temperature=None,
+            top_p=None,
+            do_sample=False,
+            max_new_tokens=256,
+        )
+        output_text = outputs[0]["generated_text"][-1]["content"]
 
-    answers.append(output_text[-1]["content"])
+    elif(MODEL == "o3-mini"):
+        for m in messages:
+                if(m["role"] == "system"):
+                    m["role"] == "developer"
+
+        completion = openai_client.chat.completions.create(
+            model="o3-mini",
+            messages=messages,
+        )
+
+        output_text = completion.choices[0].message
+
+        print(output_text)
+        exit()
+    else:
+        raise ValueError(f"\"{MODEL}\" is not a valid model.")
+
+    answers.append(output_text)
 
 correctness = []
 for (context, question), answer in zip(questions, answers):
@@ -195,8 +221,11 @@ for bar in bars:
 
 ax.grid(axis='y', linestyle='--', alpha=0.7)
 
+cxt_name = '_'.join([s.rsplit('.', 1)[0] for s in [QUESTION_FILE, *CONTEXT_FILES]])
+fig_dir = os.path.join(FIG_DIR, cxt_name)
+os.makedirs(fig_dir, exist_ok=True)
 fig_name = f"{'_'.join([URL_TO_NAME[k].lower().replace(' ', '_') for k in context_keys])}.png"
-fig_path = os.path.join(FIG_DIR, fig_name) 
+fig_path = os.path.join(fig_dir, fig_name)
 plt.savefig(fig_path, bbox_inches="tight")
 
 print(list(zip(answers, correctness)))

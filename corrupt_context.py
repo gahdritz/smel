@@ -8,8 +8,12 @@ from transformers import (
     BitsAndBytesConfig,
 )
 
-QUESTION_FILE = "questions_filtered.pickle"
-CONTEXT_FILE = "questions_filtered_rewritten.pickle"
+PICKLE_DIR = "pickles"
+QUESTION_FILE = "gov_questions_filtered.pickle"
+CONTEXT_FILE = "gov_questions_filtered_rewritten.pickle"
+RESUME = True
+
+BATCH_SIZE = 32
 
 model_name = "meta-llama/Llama-3.3-70B-Instruct"
 tokenizer_name = "meta-llama/Llama-3.2-1B-Instruct"
@@ -27,7 +31,7 @@ pipeline = transformers.pipeline(
     device_map="auto",
 )
 
-with open(QUESTION_FILE, "rb") as fp:
+with open(os.path.join(PICKLE_DIR, QUESTION_FILE), "rb") as fp:
     questions = pickle.load(fp)
 
 def parse_question(question):
@@ -39,55 +43,87 @@ def parse_question(question):
 if(CONTEXT_FILE is None):
     contexts = {"context": [c for c, q in questions]}
 else:
-    with open(CONTEXT_FILE, "rb") as fp:
+    with open(os.path.join(PICKLE_DIR, CONTEXT_FILE), "rb") as fp:
         contexts = pickle.load(fp)
 
 question_file = os.path.basename(QUESTION_FILE).rsplit('.', 1)[0]
 if(CONTEXT_FILE is not None):
     question_file += '_' + os.path.basename(CONTEXT_FILE).rsplit('.', 1)[0]
 
-all_corrupted = {}
+if(RESUME):
+    with open(os.path.join(PICKLE_DIR, f"{question_file}_corrupted.pickle"), "rb") as fp:
+        all_corrupted = pickle.load(fp)
+else:
+    all_corrupted = {}
+
 for context_key, context_list in contexts.items():
     print(context_key)
+    
+    if(context_key in all_corrupted):
+        corrupted = all_corrupted[context_key]
+    else:
+        corrupted = []
 
-    assert(len(context_list) == len(questions)) 
+    #assert(len(context_list) == len(questions)) 
 
-    corrupted = []
+    accum = {}
     for i, (context, (_, question)) in enumerate(zip(context_list, questions)):
+        if(i < len(corrupted)):
+            continue
+        
         if(i % 10 == 0):
             print(i)
     
+        accum.setdefault("context", [])
+        accum["context"].append(context)
+        
         q, a = parse_question(question)
-    
+   
+        accum.setdefault("q", [])
+        accum["q"].append(q)
+
         messages = [
             {"role": "system", "content": "You are a bot that writes alternative, incorrect answers to questions. Given a question and answer pair, randomly perturb the answer a little. Do not perturb the answer too much; it should be a plausible but incorrect answer to the question. Do not write anything but the new answer."},
             {"role": "user", "content": f"Question: {q}\nAnswer: {a}"}
         ]
-    
-        outputs = pipeline(
-            messages,
-            temperature=0.7,
-            max_new_tokens=256,
-        )
-        output_text = outputs[0]["generated_text"]
-    
-        incorrect_fact = output_text[-1]["content"]
-    
-        messages = [
-            {"role": "system", "content": "You are a bot that rewrites text given new information. Given a passage of text and a fact, rewrite the passage of text to be consistent with the new fact. Make sure to preserve the style of the original text. Try to incorporate as much of the information in the original passage as possible, altering only what needs to be altered for consistency with the new fact. Do not write anything but the rewritten passage."},
-            {"role": "user", "content": f"Passage: {context}\nFact: {incorrect_fact}"}
-        ]   
+
+        accum.setdefault("messages", [])
+        accum["messages"].append(messages)
+
+        if(len(accum["messages"]) == BATCH_SIZE or i == len(questions) - 1):    
+            outputs = pipeline(
+                accum["messages"],
+                temperature=0.7,
+                max_new_tokens=256,
+            )
+            
+            output_texts = [o[0]["generated_text"] for o in outputs]
+        else:
+            continue
+
+        incorrect_facts = [o[-1]["content"] for o in output_texts]
+
+        accum["messages"] = []
+        for ic, c in zip(incorrect_facts, accum["context"]):
+            messages = [
+                {"role": "system", "content": "You are a bot that rewrites text given new information. Given a passage of text and a fact, rewrite the passage of text to be consistent with the new fact. Make sure to preserve the style of the original text. Try to incorporate as much of the information in the original passage as possible, altering only what needs to be altered for consistency with the new fact. Do not write anything but the rewritten passage."},
+                {"role": "user", "content": f"Passage: {c}\nFact: {ic}"}
+            ]
+
+            accum["messages"].append(messages)
         
         outputs = pipeline(
-            messages,
+            accum["messages"],
             temperature=0.7,
             max_new_tokens=512,
         )
-        output_text = outputs[0]["generated_text"]
+        output_texts = [o[0]["generated_text"] for o in outputs]
     
-        corrupted.append((output_text[-1]["content"], f"{q} \n{incorrect_fact}"))
+        corrupted.extend([(o[-1]["content"], f"{q} \n{ic}") for o, ic, q in zip(output_texts, incorrect_facts, accum["q"])])
+
+        accum = {}
 
     all_corrupted[context_key] = corrupted
 
-    with open(f"{question_file}_corrupted.pickle", "wb") as fp:
+    with open(os.path.join(PICKLE_DIR, f"{question_file}_corrupted.pickle"), "wb") as fp:
         pickle.dump(all_corrupted, fp, protocol=pickle.HIGHEST_PROTOCOL)

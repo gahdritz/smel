@@ -1,4 +1,3 @@
-from accelerate import Accelerator
 import os
 import pickle
 import torch
@@ -13,11 +12,13 @@ from constants import DOMAINS
 from few_shot_examples import FEW_SHOT_EXAMPLES
 
 PICKLE_DIR = "pickles"
-QUESTION_FILE = "gov_questions.pickle"
+QUESTION_FILE = "gov_questions_filtered.pickle"
 USE_CONTEXT = True
 FEW_SHOT = True
 FEW_SHOT_K = 2
-RESUME = False
+RESUME = True
+
+BATCH_SIZE = 64 
 
 model_name = "meta-llama/Llama-3.3-70B-Instruct"
 tokenizer_name = "meta-llama/Llama-3.2-1B-Instruct"
@@ -54,6 +55,7 @@ def parse_question(question):
     a = a.strip()
     return q, a
 
+accum = {}
 for i, (context, question) in enumerate(questions):
     if(i < start_point):
         continue
@@ -81,22 +83,49 @@ for i, (context, question) in enumerate(questions):
         user_message["content"] += f"Context: {context}\nFact to include: {a}"
         messages.append(user_message)
 
-        outputs = pipeline(
-            messages,
-            temperature=1.0,
-            max_new_tokens=512,
-        )
-        output_text = outputs[0]["generated_text"]
- 
-        print(output_text[-1]["content"])
-        exit()
+        accum.setdefault("messages", [])
+        accum["messages"].append(messages)
 
-        rewritten.setdefault(url, [])
-        rewritten[url].append((output_text[-1]["content"], a))
+        accum.setdefault("url", [])
+        accum["url"].append(url)
+        
+        accum.setdefault("a", [])
+        accum["a"].append(a)
+
+        if(len(accum["messages"]) == BATCH_SIZE):    
+            outputs = pipeline(
+                accum["messages"],
+                temperature=1.0,
+                max_new_tokens=512,
+            )
+            output_texts = [o[0]["generated_text"] for o in outputs]
+    
+            for accum_o, accum_u, accum_a in zip(output_texts, accum["url"], accum["a"]):
+                rewritten.setdefault(accum_u, [])
+                rewritten[accum_u].append((accum_o[-1]["content"], accum_a))
+
+            accum = {}
+        else:
+            print("hello!")
+            continue
 
     if(i % 10 == 0):
         with open(os.path.join(PICKLE_DIR, f"{question_file}_rewritten.pickle"), "wb") as fp:
             pickle.dump(rewritten, fp, protocol=pickle.HIGHEST_PROTOCOL)
+
+if(len(accum) > 0):
+    outputs = pipeline(
+        accum["messages"],
+        temperature=1.0,
+        max_new_tokens=512,
+    )
+    output_texts = [o[0]["generated_text"] for o in outputs]
+
+    for accum_o, accum_u, accum_a in zip(output_texts, accum["url"], accum["a"]):
+        rewritten.setdefault(accum_u, [])
+        rewritten[accum_u].append((accum_o[-1]["content"], accum_a))
+
+    accum = {}
 
 with open(os.path.join(PICKLE_DIR, f"{question_file}_rewritten.pickle"), "wb") as fp:
     pickle.dump(rewritten, fp, protocol=pickle.HIGHEST_PROTOCOL)

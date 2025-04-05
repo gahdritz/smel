@@ -27,14 +27,14 @@ def parse_question(question):
     return q, a
 
 
-QUESTION_FILE = "disaster_questions_filtered.pickle"
+QUESTION_FILE = "crime_questions_filtered.pickle"
 CONTEXT_FILES = [
-    "disaster_questions_filtered_rewritten.pickle",
-    "disaster_questions_filtered_disaster_questions_filtered_rewritten_corrupted.pickle",
+    "crime_questions_filtered_rewritten.pickle",
+    "crime_questions_filtered_crime_questions_filtered_rewritten_corrupted.pickle",
 ]
 
 MODEL = "llama"
-RUN_NAME = "disaster_corrupted"
+RUN_NAME = "crime_corrupted"
 FIG_DIR = f"results/{MODEL}_{RUN_NAME}"
 PICKLE_DIR = "pickles"
 OUTPUT_DIR = f"pickles/{MODEL}_{RUN_NAME}/"

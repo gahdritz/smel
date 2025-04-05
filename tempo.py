@@ -183,7 +183,7 @@ for i, (_, question) in enumerate(questions):
         openai_model = MODEL.split('_')[-1]
         for m in messages:
                 if(m["role"] == "system"):
-                    m["role"] = "developer"
+                    m["role"] == "developer"
 
         if(not OPENAI_BATCH):
             completion = openai_client.chat.completions.create(

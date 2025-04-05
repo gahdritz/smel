@@ -1,3 +1,5 @@
+import json
+import openai
 import os
 import pickle
 import torch
@@ -12,29 +14,45 @@ from constants import DOMAINS
 from few_shot_examples import FEW_SHOT_EXAMPLES
 
 PICKLE_DIR = "pickles"
-QUESTION_FILE = "gov_questions_filtered.pickle"
+QUESTION_FILE = "disaster_questions_filtered.pickle"
 USE_CONTEXT = True
 FEW_SHOT = True
 FEW_SHOT_K = 2
-RESUME = True
+RUN_NAME = "disaster"
+RESUME = False
 
-BATCH_SIZE = 64 
+#MODEL = "meta-llama/Llama-3.3-70B-Instruct"
+MODEL = "openai_gpt-4o"
 
-model_name = "meta-llama/Llama-3.3-70B-Instruct"
-tokenizer_name = "meta-llama/Llama-3.2-1B-Instruct"
+OPENAI_BATCH = True and "openai" in MODEL
+OPENAI_BATCH_DIR = f"openai_batches/{MODEL}_domain"
 
-quantization_config = BitsAndBytesConfig(
-    load_in_8bit=True,
-)
+openai_client = None
+if("openai" in MODEL):
+    openai_client = openai.OpenAI(
+***REMOVED***
+    )
 
 # Load the model and tokenizer
-pipeline = transformers.pipeline(
-    "text-generation",
-    model=model_name,
-    #model_kwargs={"quantization_config": quantization_config, "torch_dtype": torch.float16},
-    model_kwargs={"torch_dtype": torch.bfloat16},
-    device_map="auto",
-)
+BATCH_SIZE = 1200 
+pipeline_batch_size = 8
+
+pipeline = None
+if(not OPENAI_BATCH): 
+    quantization_config = BitsAndBytesConfig(
+        load_in_8bit=True,
+    )
+    
+    tokenizer = AutoTokenizer.from_pretrained(MODEL, padding_side="left")
+
+    pipeline = transformers.pipeline(
+        "text-generation",
+        model=MODEL,
+        #model_kwargs={"quantization_config": quantization_config, "torch_dtype": torch.float16},
+        model_kwargs={"torch_dtype": torch.bfloat16, "attn_implementation": "flash_attention_2"},
+        tokenizer=tokenizer,
+        device_map="auto",
+    )
 
 with open(os.path.join(PICKLE_DIR, QUESTION_FILE), "rb") as fp:
     questions = pickle.load(fp)
@@ -55,7 +73,29 @@ def parse_question(question):
     a = a.strip()
     return q, a
 
+
+def process_messages_openai(messages, idx):
+    openai_model = MODEL.split('_')[-1]
+    for m in messages:
+        if(m["role"] == "system"):
+            m["role"] = "developer"
+
+    batch_line = {
+        "custom_id": f"request-{idx + 1}",
+        "method": "POST",
+        "url": "/v1/chat/completions",
+        "body": {
+            "model": openai_model,
+            "messages": messages,
+        }
+    }
+
+    return batch_line
+
 accum = {}
+openai_batch = []
+openai_metadata = []
+openai_idx = 0
 for i, (context, question) in enumerate(questions):
     if(i < start_point):
         continue
@@ -66,7 +106,7 @@ for i, (context, question) in enumerate(questions):
     q, a = parse_question(question)
     for description, url in DOMAINS:
         messages = [
-                {"role": "system", "content": "You are a bot that writes passages of text containing a specific fact in a specific style. Given a description of the source, the URL of the source, some context and source samples, and a fact, write an excerpt containing the fact with the precise style and tone of the source. The placement of the fact should sound natural and should make sense in context. The excerpt should not be self-contained and should start and end abruptly, as if it's been taken from a larger document or webpage. Do not make the fact the focus of the excerpt. Do not make the excerpt more specific than the source requires, and do not reference all of the additional facts from the provided context. Do not include any information from the source samples; they are provided only as style guides. You are encouraged to include unrelated information, even if you have to make it up. Do not add commentary or otherwise editorialize the excerpt (no words like \"fascinating\"). Do not write run-on sentences. Do not write anything but the excerpt."},
+                {"role": "system", "content": "You are an assistant that writes passages of text containing a specific fact in a specific style. Given a description of the source, the URL of the source, some context and source samples, and a fact, write a medium-length excerpt (up to 2-3 paragraphs) containing the fact with the precise style and tone of the source. The placement of the fact should sound natural and should make sense in context. The excerpt should not be self-contained and can start and end abruptly, as if it's been taken from a larger document or webpage. Do not make the fact the focus of the excerpt. Do not make the excerpt more specific than the source requires, and do not reference all of the additional facts from the provided context. Do not include any information from the source samples; they are provided only as style guides. You are encouraged to include unrelated information, even if you have to make it up. Do not add commentary or otherwise editorialize the excerpt (no words like \"fascinating\"). Do not write run-on sentences. Do not write anything but the excerpt."},
         ]
 
         user_message = {"role": "user", "content": f"Source: {description}\nURL: {url}\n"}
@@ -78,9 +118,9 @@ for i, (context, question) in enumerate(questions):
             
             fses = [c for c, _ in FEW_SHOT_EXAMPLES[url][:FEW_SHOT_K]]
             for j, fse in enumerate(fses):
-                user_message["content"] += f"Source sample {j + 1}: {fse}\n"
+                user_message["content"] += f"Source sample {j + 1}: \"{fse}\"\n"
 
-        user_message["content"] += f"Context: {context}\nFact to include: {a}"
+        user_message["content"] += f"Context: \"{context}\"\nFact to include: {a}"
         messages.append(user_message)
 
         accum.setdefault("messages", [])
@@ -92,21 +132,29 @@ for i, (context, question) in enumerate(questions):
         accum.setdefault("a", [])
         accum["a"].append(a)
 
-        if(len(accum["messages"]) == BATCH_SIZE):    
-            outputs = pipeline(
-                accum["messages"],
-                temperature=1.0,
-                max_new_tokens=512,
-            )
-            output_texts = [o[0]["generated_text"] for o in outputs]
+        if(len(accum["messages"]) == BATCH_SIZE):
+            if(not OPENAI_BATCH):
+                outputs = pipeline(
+                    accum["messages"],
+                    temperature=1.0,
+                    batch_size=pipeline_batch_size,
+                    max_new_tokens=512,
+                )
+                output_texts = [o[0]["generated_text"] for o in outputs]
+        
+                for accum_o, accum_u, accum_a in zip(output_texts, accum["url"], accum["a"]):
+                    rewritten.setdefault(accum_u, [])
+                    rewritten[accum_u].append((accum_o[-1]["content"], accum_a))
     
-            for accum_o, accum_u, accum_a in zip(output_texts, accum["url"], accum["a"]):
-                rewritten.setdefault(accum_u, [])
-                rewritten[accum_u].append((accum_o[-1]["content"], accum_a))
+            else:
+                for m in accum["messages"]:
+                    openai_batch.append(
+                        process_messages_openai(m, openai_idx)
+                    )
+                    openai_idx += 1
 
             accum = {}
         else:
-            print("hello!")
             continue
 
     if(i % 10 == 0):
@@ -114,19 +162,33 @@ for i, (context, question) in enumerate(questions):
             pickle.dump(rewritten, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
 if(len(accum) > 0):
-    outputs = pipeline(
-        accum["messages"],
-        temperature=1.0,
-        max_new_tokens=512,
-    )
-    output_texts = [o[0]["generated_text"] for o in outputs]
+    if(not OPENAI_BATCH):
+        outputs = pipeline(
+            accum["messages"],
+            temperature=1.0,
+            batch_size=pipeline_batch_size,
+            max_new_tokens=512,
+        )
+        output_texts = [o[0]["generated_text"] for o in outputs]
 
-    for accum_o, accum_u, accum_a in zip(output_texts, accum["url"], accum["a"]):
-        rewritten.setdefault(accum_u, [])
-        rewritten[accum_u].append((accum_o[-1]["content"], accum_a))
+        for accum_o, accum_u, accum_a in zip(output_texts, accum["url"], accum["a"]):
+            rewritten.setdefault(accum_u, [])
+            rewritten[accum_u].append((accum_o[-1]["content"], accum_a))
 
-    accum = {}
-
-with open(os.path.join(PICKLE_DIR, f"{question_file}_rewritten.pickle"), "wb") as fp:
-    pickle.dump(rewritten, fp, protocol=pickle.HIGHEST_PROTOCOL)
+    else:
+        for m in accum["messages"]:
+            openai_batch.append(
+                process_messages_openai(m, openai_idx)
+            )
+            openai_idx += 1
+ 
+if(not OPENAI_BATCH):
+    with open(os.path.join(PICKLE_DIR, f"{question_file}_rewritten.pickle"), "wb") as fp:
+        pickle.dump(rewritten, fp, protocol=pickle.HIGHEST_PROTOCOL)
+else:
+    os.makedirs(OPENAI_BATCH_DIR, exist_ok=True)
+    with open(os.path.join(OPENAI_BATCH_DIR, f"{RUN_NAME}.jsonl"), "w") as fp:
+        for b in openai_batch:
+            json.dump(b, fp)
+            fp.write('\n')
 

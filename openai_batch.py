@@ -2,7 +2,7 @@ import os
 
 from openai import OpenAI
 
-BATCH_DIR = "openai_batches/openai_o3-mini"
+BATCH_DIR = "fact_leakage/openai_batches/openai_o3-mini"
 
 file_ids = {}
 for f in os.listdir(BATCH_DIR):
@@ -22,7 +22,7 @@ for f in os.listdir(BATCH_DIR):
         endpoint="/v1/chat/completions",
         completion_window="24h",
         metadata={
-            "description": "o3 gov eval"
+            "description": "domain_change"
         }
     )
 

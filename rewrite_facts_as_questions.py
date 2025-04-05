@@ -24,7 +24,7 @@ pipeline = transformers.pipeline(
     device_map="auto",
 )
 
-with open("pickles/gov_facts.pickle", "rb") as fp:
+with open("pickles/crime_facts.pickle", "rb") as fp:
     facts = pickle.load(fp)
 
 all_outputs = []
@@ -58,6 +58,6 @@ for i, f in enumerate(facts):
     if(len(all_outputs) % 10 == 0):
         print("hololo!")
         import pickle
-        with open("pickles/gov_questions.pickle", "wb") as fp:
+        with open("pickles/crime_questions.pickle", "wb") as fp:
             pickle.dump(all_outputs, fp, protocol=pickle.HIGHEST_PROTOCOL)
 

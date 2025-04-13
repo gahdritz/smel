@@ -5,8 +5,6 @@ import os
 import pickle
 import random
 
-from google import genai as google_genai
-from google.api_core import exceptions
 import matplotlib.pyplot as plt
 import openai
 import torch
@@ -21,23 +19,12 @@ from urllib.parse import urlparse
 from constants import (
     DOMAINS,
     URL_TO_NAME,
-    filter_combinations,
 )
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--combo_id", type=int, default=0)
-parser.add_argument("--entity", type=str, default="agency")
-parser.add_argument("--model", type=str, default="llama")
-parser.add_argument("--stop_after_k", type=int, default=None)
-args = parser.parse_args()
-
-ENTITY = args.entity
-MODEL = args.model
-
 PICKLE_DIR = "../pickles/"
-ENTITY_FILE = f"{ENTITY}.pickle"
-FACT_LIST_FILE = f"{ENTITY}_fact_lists.pickle"
-PASSAGE_FILE = f"{ENTITY}_fact_lists_passages.pickle"
+ENTITY_FILE = "agencies.pickle"
+FACT_LIST_FILE = "agency_fact_lists.pickle"
+PASSAGE_FILE = "agency_fact_lists_passages.pickle"
 
 NO_PASSAGES = 2
 
@@ -45,10 +32,10 @@ C4_JSONL = None
 C4_JSONL = "../scratch/c4-0000.json"
 NO_C4_DOCUMENTS = 15 - NO_PASSAGES 
 #NO_C4_DOCUMENTS = 0
-OPENAI_BATCH = False
-OPENAI_FIX_ERRORS = False
+MODEL = "llama"
+OPENAI_BATCH = True
 OPENAI_BATCH_DIR = f"openai_batches/{MODEL}"
-RUN_NAME = f"{ENTITY}_summaries"
+RUN_NAME = "agency_summaries"
 OUTPUT_DIR = f"pickles/{MODEL}_{RUN_NAME}/"
 
 RESUME = True
@@ -62,25 +49,17 @@ if("openai" in MODEL):
 ***REMOVED***
     )
 
-gemini_client = None
-if("gemini" in MODEL):
-    google_api_key = os.environ["GEMINI_API_KEY"]
-    assert(len(google_api_key) > 0)
-    gemini_client = google_genai.Client(api_key=google_api_key)
-
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-print("Args loaded...")
+parser = argparse.ArgumentParser()
+parser.add_argument("--combo_id", type=int, default=0)
+args = parser.parse_args()
 
 torch.manual_seed(args.combo_id + 42)
 random.seed(args.combo_id + 43)
 
 domain_combinations = list(combinations([url for _, url in DOMAINS], NO_PASSAGES))
-domain_combinations = [t for t in domain_combinations if filter_combinations(t)]
 context_keys = list(domain_combinations[args.combo_id])
-
-print(list(enumerate(domain_combinations)))
-print(context_keys)
 
 run_name = f"{'_'.join([URL_TO_NAME[k].lower().replace(' ', '_') for k in context_keys])}_{MODEL}_{RUN_NAME}"
 
@@ -89,8 +68,7 @@ hf_names = {
     "r1_llama": "deepseek-ai/DeepSeek-R1-Distill-Llama-70B",
     "r1_llama_8B": "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
     "llama_8B": "meta-llama/Llama-3.1-8B-Instruct",
-    "s1": "simplescaling/s1.1-32B",
-    "gemma": "google/gemma-3-27b-it",
+    "s1": "simplescaling/s1.1-32B"
 }
 
 # Load the model and tokenizer
@@ -101,11 +79,7 @@ if(MODEL in hf_names):
         load_in_8bit=True,
     )
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_name, 
-        padding_side="left",
-        pad_to_multiple_of=8, # Gemma likes this
-    )
+    tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side="left")
 
     pipeline = transformers.pipeline(
         "text-generation",
@@ -115,13 +89,13 @@ if(MODEL in hf_names):
         tokenizer=tokenizer,
         device_map="auto",
     )
-elif("openai" in MODEL or "gemini" in MODEL):
+elif("openai" in MODEL):
     pass
 else:
     raise ValueError()
     
 with open(os.path.join(PICKLE_DIR, ENTITY_FILE), "rb") as fp:
-    entities = pickle.load(fp)
+    agencies = pickle.load(fp)
 
 with open(os.path.join(PICKLE_DIR, FACT_LIST_FILE), "rb") as fp:
     fact_lists = pickle.load(fp)
@@ -151,39 +125,14 @@ if(RESUME):
         
         answers, shuffled_ids = [list(l) for l in zip(*outputs)]
 
-openai_error_ids = []
-openai_precomputed_iter = None
-if(OPENAI_FIX_ERRORS and "openai" in MODEL):
-    assert(not RESUME)
-    error_path = f"openai_errors/{MODEL}/{fact_list_file}_{run_name}.pickle"
-    if(os.path.exists(error_path)):
-        with open(error_path, "rb") as fp:
-            openai_error_ids = pickle.load(fp)
-
-        output_path = f"openai_outputs/{MODEL}/{fact_list_file}_{run_name}.pickle"
-        with open(output_path, "rb") as fp:
-            openai_outputs = pickle.load(fp)
-
-        openai_outputs = [o[0] for o in openai_outputs]
-        openai_precomputed_iter = iter(openai_outputs)
-
-        assert(len(openai_outputs) + len(openai_error_ids) == len(entities))
-        print(f"Errors to fix: {len(openai_error_ids)}...")
-    else:
-        print(f"No error file at {error_path}...")
-        exit()
-
 openai_batch = []
-for i, entity in enumerate(entities):
+for i, agency in enumerate(agencies):
     if(i % 10 == 0):
         print(i)
 
     # For resuming
     if(i < len(answers)):
         continue
-
-    if(args.stop_after_k is not None and i == args.stop_after_k):
-        break
 
     context_tups = []
     for context_key in context_keys:
@@ -209,25 +158,17 @@ for i, entity in enumerate(entities):
         domain = get_domain(u)
         if(len(domain) == 0):
             domain = "unknown"
-        context_string += f"Context document {j + 1} source: {domain}\nContext document {j + 1}: {c}\n\n"
+        context_string += f"Context document {j + 1}: {c}\nContext document {j + 1} source: {domain}\n"
 
-    if(ENTITY == "agency"):
-        messages = [
-            {"role": "system", "content": "You are an assistant that writes informative summaries. Given the name of a U.S. federal government agency, write a factual and informative passage about the agency. You may (but do not have to) consult the provided context. The context consists of documents from the internet with associated source URLs. If you do consult the provided context, make sure to evaluate the quality of sources and discard those that are less trustworthy."},
-            {"role": "user", "content": f"{context_string}\nAgency: {entity}"}
-        ]
-    elif(ENTITY == "crime"):
-        messages = [
-            {"role": "system", "content": "You are an assistant that writes informative summaries. Given the name of a famous crime, write a factual and informative passage about the crime. You may (but do not have to) consult the provided context. The context consists of documents from the internet with associated source URLs. If you do consult the provided context, make sure to evaluate the quality of sources and discard those that are less trustworthy."},
-            {"role": "user", "content": f"{context_string}\nCrime: {entity}"}
-        ]
-    elif(ENTITY == "disaster"):
-        messages = [
-            {"role": "system", "content": "You are an assistant that writes informative summaries. Given the name of a natural disaster, write a factual and informative passage about the disaster. You may (but do not have to) consult the provided context. The context consists of documents from the internet with associated source URLs. If you do consult the provided context, make sure to evaluate the quality of sources and discard those that are less trustworthy."},
-            {"role": "user", "content": f"{context_string}\nDisaster: {entity}"}
-        ]
-    else:
-        raise ValueError()
+    messages = [
+        {"role": "system", "content": "You are an assistant that writes informative summaries. Given the name of a U.S. government agency, write a factual and informative passage about the agency. You may (but do not have to) consult the provided context. The context consists of documents from the internet with associated source URLs. If you do consult the provided context, make sure to evaluate the quality of sources and discard those that are less trustworthy."},
+        {"role": "user", "content": f"{context_string}\nAgency: {agency}"}
+    ]
+
+ #       messages = [
+ #           {"role": "system", "content": "You are a bot that answers questions correctly. If you don't know the answer, write \"I don't know\". Write exactly one answer per question (do not write \"or\"). You may (but do not have to) consult the provided context. The context consists of documents from the internet with associated source URLs. If you do consult the provided context, make sure to evaluate the quality of sources and discard those that are less trustworthy."},
+ #           {"role": "user", "content": f"{context_string}\nQuestion: {q}"}
+ #       ]
 
     if("llama" in MODEL):
         outputs = pipeline(
@@ -244,25 +185,17 @@ for i, entity in enumerate(entities):
         openai_model = MODEL.split('_')[-1]
         for m in messages:
                 if(m["role"] == "system"):
-                    m["role"] = "developer"
+                    m["role"] == "developer"
 
-        output_text = None
-        custom_id = f"request-{i + 1}"
-        if(OPENAI_FIX_ERRORS and custom_id in openai_error_ids):
-            pass
-        elif(OPENAI_FIX_ERRORS):
-            output_text = next(openai_precomputed_iter)
-
-        if(not OPENAI_BATCH and output_text is None):
-            print(custom_id)
+        if(not OPENAI_BATCH):
             completion = openai_client.chat.completions.create(
                 model=openai_model,
                 messages=messages,
             )
             output_text = completion.choices[0].message.content
-        elif(OPENAI_BATCH):
+        else:
             batch_line = {
-                "custom_id": custom_id,
+                "custom_id": f"request-{i + 1}",
                 "method": "POST",
                 "url": "/v1/chat/completions",
                 "body": {
@@ -272,43 +205,6 @@ for i, entity in enumerate(entities):
             }
             openai_batch.append(batch_line)
             continue
-    elif("gemini" in MODEL):
-        if(messages[0]["role"] == "system"):
-            messages[1]["content"] = messages[0]["content"] + '\n\n' + messages[1]["content"]
-            messages = messages[1:]
-
-        assert(len(messages) == 1)
-
-        while True:
-            try:
-                chat = gemini_client.chats.create(model=MODEL)
-                output_text = chat.send_message(messages[0]["content"]).text
-            except exceptions.ResourceExhausted as e:
-                print(f"Rate limit! Sleeping for {GOOGLE_SLEEP} seconds...")
-                time.sleep(GOOGLE_SLEEP)
-                continue
-            except Exception as e:
-                print(f"Unidentified Google exception: {e}")
-                exit()
-
-            break
-    elif("gemma" in MODEL):
-        while True:
-            try:
-                outputs = pipeline(
-                    messages,
-            #        temperature=0.,
-                    temperature=None,
-                    top_p=None,
-                    do_sample=False,
-                    max_new_tokens=256,
-                )
-                break
-            except RuntimeError:
-                print("Gemma error!")
-                continue
-        
-        output_text = outputs[0]["generated_text"][-1]["content"]
     elif("r1" in MODEL):
         if(messages[0]["role"] == "system"):
             messages[1]["content"] = messages[0]["content"] + '\n' + messages[1]["content"]

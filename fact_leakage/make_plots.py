@@ -3,7 +3,7 @@ import pickle
 
 import matplotlib.pyplot as plt
 
-RESULTS_DIR = "llama_agency_summaries"
+RESULTS_DIR = "gemini-2.5-pro-preview-03-25_disaster_summaries"
 PICKLE_DIR = "pickles"
 PLOT_DIR = "plots"
 
@@ -15,7 +15,7 @@ for f in os.listdir(results_dir_path):
     with open(os.path.join(results_dir_path, f), "rb") as fp:
         results = pickle.load(fp)
 
-    assert(len(results) == 500)
+    assert(len(results) == 50)
     results = [r.split('\n')[:2] for r in results]
     results = [tuple(["Nothing" not in l for l in r]) for r in results]
 
@@ -29,7 +29,7 @@ for f in os.listdir(results_dir_path):
 
     bars = ax.bar([str(t) for t in k], v)
    
-    run_name = f.strip("_supported.pickle")
+    run_name = f.split("_supported.pickle")[0]
 
     ax.set_title(run_name)
     

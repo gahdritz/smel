@@ -46,12 +46,12 @@ C4_JSONL = "../scratch/c4-0000.json"
 NO_C4_DOCUMENTS = 15 - NO_PASSAGES 
 #NO_C4_DOCUMENTS = 0
 OPENAI_BATCH = False
-OPENAI_FIX_ERRORS = False
+OPENAI_FIX_ERRORS = True
 OPENAI_BATCH_DIR = f"openai_batches/{MODEL}"
 RUN_NAME = f"{ENTITY}_summaries"
 OUTPUT_DIR = f"pickles/{MODEL}_{RUN_NAME}/"
 
-RESUME = True
+RESUME = False
 
 if(not "openai" in MODEL):
     OPENAI_BATCH = False

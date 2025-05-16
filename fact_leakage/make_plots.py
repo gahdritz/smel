@@ -3,7 +3,7 @@ import pickle
 
 import matplotlib.pyplot as plt
 
-RESULTS_DIR = "gemini-2.5-pro-preview-03-25_disaster_summaries"
+RESULTS_DIR = "llama_disaster_summaries"
 PICKLE_DIR = "pickles"
 PLOT_DIR = "plots"
 
@@ -15,7 +15,7 @@ for f in os.listdir(results_dir_path):
     with open(os.path.join(results_dir_path, f), "rb") as fp:
         results = pickle.load(fp)
 
-    assert(len(results) == 50)
+    assert(len(results) == 200)
     results = [r.split('\n')[:2] for r in results]
     results = [tuple(["Nothing" not in l for l in r]) for r in results]
 

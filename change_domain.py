@@ -14,17 +14,18 @@ from constants import DOMAINS
 from few_shot_examples import FEW_SHOT_EXAMPLES
 
 PICKLE_DIR = "pickles"
-QUESTION_FILE = "disaster_questions_filtered.pickle"
+QUESTION_FILE = "agency_questions_filtered.pickle"
 USE_CONTEXT = True
 FEW_SHOT = True
 FEW_SHOT_K = 2
-RUN_NAME = "disaster"
+RUN_NAME = "agency"
 RESUME = False
 
 #MODEL = "meta-llama/Llama-3.3-70B-Instruct"
-MODEL = "openai_gpt-4o"
+#MODEL = "openai_gpt-4o"
+MODEL = "openai_chatgpt-4o-latest"
 
-OPENAI_BATCH = True and "openai" in MODEL
+OPENAI_BATCH = False and "openai" in MODEL
 OPENAI_BATCH_DIR = f"openai_batches/{MODEL}_domain"
 
 openai_client = None
@@ -34,11 +35,11 @@ if("openai" in MODEL):
     )
 
 # Load the model and tokenizer
-BATCH_SIZE = 1200 
-pipeline_batch_size = 8
+BATCH_SIZE = 1 
+pipeline_batch_size = 1
 
 pipeline = None
-if(not OPENAI_BATCH): 
+if(not "openai" in MODEL): 
     quantization_config = BitsAndBytesConfig(
         load_in_8bit=True,
     )
@@ -118,7 +119,8 @@ for i, (context, question) in enumerate(questions):
             
             fses = [c for c, _ in FEW_SHOT_EXAMPLES[url][:FEW_SHOT_K]]
             for j, fse in enumerate(fses):
-                user_message["content"] += f"Source sample {j + 1}: \"{fse}\"\n"
+                fse = fse.replace('"', "'")
+                user_message["content"] += f"Source sample {j + 1}: \"{fse}\"\n\n"
 
         user_message["content"] += f"Context: \"{context}\"\nFact to include: {a}"
         messages.append(user_message)
@@ -134,17 +136,27 @@ for i, (context, question) in enumerate(questions):
 
         if(len(accum["messages"]) == BATCH_SIZE):
             if(not OPENAI_BATCH):
-                outputs = pipeline(
-                    accum["messages"],
-                    temperature=1.0,
-                    batch_size=pipeline_batch_size,
-                    max_new_tokens=512,
-                )
-                output_texts = [o[0]["generated_text"] for o in outputs]
+                if('openai' in MODEL):
+                    openai_model = MODEL.split('_')[-1]
+                    output_texts = []
+                    for messages in accum["messages"]:
+                        completion = openai_client.chat.completions.create(
+                            model=openai_model,
+                            messages=messages,
+                        )
+                        output_texts.append(completion.choices[0].message.content)
+                else:
+                    outputs = pipeline(
+                        accum["messages"],
+                        temperature=1.0,
+                        batch_size=pipeline_batch_size,
+                        max_new_tokens=512,
+                    )
+                    output_texts = [o[0]["generated_text"][-1]["content"] for o in outputs]
         
                 for accum_o, accum_u, accum_a in zip(output_texts, accum["url"], accum["a"]):
                     rewritten.setdefault(accum_u, [])
-                    rewritten[accum_u].append((accum_o[-1]["content"], accum_a))
+                    rewritten[accum_u].append((accum_o, accum_a))
     
             else:
                 for m in accum["messages"]:
@@ -163,17 +175,27 @@ for i, (context, question) in enumerate(questions):
 
 if(len(accum) > 0):
     if(not OPENAI_BATCH):
-        outputs = pipeline(
-            accum["messages"],
-            temperature=1.0,
-            batch_size=pipeline_batch_size,
-            max_new_tokens=512,
-        )
-        output_texts = [o[0]["generated_text"] for o in outputs]
+        if('openai' in MODEL):
+            openai_model = MODEL.split('_')[-1]
+            output_texts = []
+            for messages in accum["messages"]:
+                completion = openai_client.chat.completions.create(
+                    model=openai_model,
+                    messages=messages,
+                )
+                output_texts.append(completion.choices[0].message.content)
+        else:
+            outputs = pipeline(
+                accum["messages"],
+                temperature=1.0,
+                batch_size=pipeline_batch_size,
+                max_new_tokens=512,
+            )
+            output_texts = [o[0]["generated_text"][-1]["content"] for o in outputs]
 
         for accum_o, accum_u, accum_a in zip(output_texts, accum["url"], accum["a"]):
             rewritten.setdefault(accum_u, [])
-            rewritten[accum_u].append((accum_o[-1]["content"], accum_a))
+            rewritten[accum_u].append((accum_o, accum_a))
 
     else:
         for m in accum["messages"]:

@@ -5,6 +5,7 @@ import os
 import pickle
 import random
 
+import anthropic
 from google import genai as google_genai
 from google.api_core import exceptions
 import matplotlib.pyplot as plt
@@ -41,6 +42,7 @@ PASSAGE_FILE = f"{ENTITY}_fact_lists_passages.pickle"
 
 NO_PASSAGES = 2
 
+WRITE_TO_DISK = True
 C4_JSONL = None
 C4_JSONL = "../scratch/c4-0000.json"
 NO_C4_DOCUMENTS = 15 - NO_PASSAGES 
@@ -50,8 +52,10 @@ OPENAI_FIX_ERRORS = False
 OPENAI_BATCH_DIR = f"openai_batches/{MODEL}"
 RUN_NAME = f"{ENTITY}_summaries"
 OUTPUT_DIR = f"pickles/{MODEL}_{RUN_NAME}/"
+PROMPT_DIR = f"pickles/{MODEL}_{RUN_NAME}_prompts/"
+LOCAL_BATCH_SIZE = None
 
-RESUME = True
+RESUME = False
 
 if(not "openai" in MODEL):
     OPENAI_BATCH = False
@@ -67,6 +71,18 @@ if("gemini" in MODEL):
     google_api_key = os.environ["GEMINI_API_KEY"]
     assert(len(google_api_key) > 0)
     gemini_client = google_genai.Client(api_key=google_api_key)
+
+deepseek_client = None
+if("deepseek" in MODEL):
+    key = os.environ["DEEPSEEK_API_KEY"]
+    deepseek_client = openai.OpenAI(
+        api_key=key,
+        base_url="https://api.deepseek.com",
+    )
+
+claude_client = None
+if("claude" in MODEL):
+    claude_client = anthropic.Anthropic()
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -91,6 +107,7 @@ hf_names = {
     "llama_8B": "meta-llama/Llama-3.1-8B-Instruct",
     "s1": "simplescaling/s1.1-32B",
     "gemma": "google/gemma-3-27b-it",
+    "gemma_4B": "google/gemma-3-4b-it",
 }
 
 # Load the model and tokenizer
@@ -115,7 +132,14 @@ if(MODEL in hf_names):
         tokenizer=tokenizer,
         device_map="auto",
     )
-elif("openai" in MODEL or "gemini" in MODEL):
+
+    if(not pipeline.tokenizer.pad_token_id):
+        eos = pipeline.model.config.eos_token_id
+        if(type(eos) is list):
+            eos = eos[0]
+
+        pipeline.tokenizer.pad_token_id = eos
+elif("openai" in MODEL or "gemini" in MODEL or "deepseek" in MODEL or "claude" in MODEL):
     pass
 else:
     raise ValueError()
@@ -174,6 +198,8 @@ if(OPENAI_FIX_ERRORS and "openai" in MODEL):
         exit()
 
 openai_batch = []
+local_batch = []
+all_messages = []
 for i, entity in enumerate(entities):
     if(i % 10 == 0):
         print(i)
@@ -229,17 +255,37 @@ for i, entity in enumerate(entities):
     else:
         raise ValueError()
 
+    all_messages.append(messages)
+
+    if(WRITE_TO_DISK):
+        continue
+
+    if(LOCAL_BATCH_SIZE):
+        local_batch.append(messages)
+        if(len(local_batch) == LOCAL_BATCH_SIZE or (len(local_batch) == 1 and i + LOCAL_BATCH_SIZE >= len(entities))):
+            pass
+        else:
+            continue
+
     if("llama" in MODEL):
+        if(not LOCAL_BATCH_SIZE):
+            local_batch = [messages]
+
         outputs = pipeline(
-            messages,
+            local_batch,
     #        temperature=0.,
             temperature=None,
             top_p=None,
             do_sample=False,
             max_new_tokens=512,
+            batch_size=LOCAL_BATCH_SIZE if LOCAL_BATCH_SIZE else 1,
         )
-        output_text = outputs[0]["generated_text"][-1]["content"]
+        output_text = [o[0]["generated_text"][-1]["content"] for o in outputs]
+
+        if(not LOCAL_BATCH_SIZE):
+            output_text = output_text[0]
     elif("openai" in MODEL):
+        assert(not LOCAL_BATCH_SIZE)
         assert('_' in MODEL)
         openai_model = MODEL.split('_')[-1]
         for m in messages:
@@ -273,6 +319,7 @@ for i, entity in enumerate(entities):
             openai_batch.append(batch_line)
             continue
     elif("gemini" in MODEL):
+        assert(not LOCAL_BATCH_SIZE)
         if(messages[0]["role"] == "system"):
             messages[1]["content"] = messages[0]["content"] + '\n\n' + messages[1]["content"]
             messages = messages[1:]
@@ -293,36 +340,61 @@ for i, entity in enumerate(entities):
 
             break
     elif("gemma" in MODEL):
+        if(not LOCAL_BATCH_SIZE):
+            local_batch = [messages]
+
         while True:
             try:
                 outputs = pipeline(
-                    messages,
+                    local_batch,
             #        temperature=0.,
                     temperature=None,
                     top_p=None,
                     do_sample=False,
-                    max_new_tokens=256,
+                    max_new_tokens=512,
+                    batch_size=LOCAL_BATCH_SIZE if LOCAL_BATCH_SIZE else 1,
                 )
                 break
             except RuntimeError:
                 print("Gemma error!")
                 continue
         
-        output_text = outputs[0]["generated_text"][-1]["content"]
-    elif("r1" in MODEL):
-        if(messages[0]["role"] == "system"):
-            messages[1]["content"] = messages[0]["content"] + '\n' + messages[1]["content"]
-            messages = messages[1:]
-        outputs = pipeline(
-            messages,
-    #        temperature=0.,
-            temperature=None,
-            top_p=None,
-            do_sample=False,
-            max_new_tokens=1024,
+        output_text = [o[0]["generated_text"][-1]["content"] for o in outputs]
+
+        if(not LOCAL_BATCH_SIZE):
+            output_text = output_text[0]
+    elif("deepseek" in MODEL):
+        assert(not LOCAL_BATCH_SIZE)
+        completion = deepseek_client.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            stream=False,
         )
-        output_text = outputs[0]["generated_text"][-1]["content"]
+        #print(len(completion.choices[0].message.reasoning_content))
+        output_text = completion.choices[0].message.content
+        print(output_text)
+    elif("claude" in MODEL):
+        assert(not LOCAL_BATCH_SIZE)
+        system=None
+        if(messages[0]["role"] == "system"):
+            system = messages[0]["content"]
+            messages = messages[1:]
+
+        message = claude_client.messages.create(
+            model=MODEL,
+            max_tokens=512,
+            temperature=1,
+            system=system,
+#            thinking={
+#                "type": "enabled",
+#                "budget_tokens": 1024,
+#            },
+            messages=messages,
+        )
+
+        output_text = message.content[-1].text
     elif("s1" in MODEL):
+        assert(not LOCAL_BATCH_SIZE)
         if(messages[0]["role"] == "system"):
             messages[1]["content"] = messages[0]["content"] + '\n\n' + messages[1]["content"]
             messages = messages[1:]
@@ -338,11 +410,24 @@ for i, entity in enumerate(entities):
     else:
         raise ValueError(f"\"{MODEL}\" is not a valid model.")
 
-    answers.append(output_text)
+    if(LOCAL_BATCH_SIZE):
+        answers.extend(output_text)
+    else:
+        answers.append(output_text)
+
+    local_batch = []
 
     if(not OPENAI_BATCH):
         with open(os.path.join(OUTPUT_DIR, f"{fact_list_file}_{run_name}.pickle"), "wb") as fp:
             pickle.dump(list(zip(answers, shuffled_ids)), fp, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+if(WRITE_TO_DISK):
+    os.makedirs(PROMPT_DIR, exist_ok=True)
+    with open(os.path.join(PROMPT_DIR, f"{fact_list_file}_{run_name}.pickle"), "wb") as fp:
+        pickle.dump(all_messages, fp, protocol=pickle.HIGHEST_PROTOCOL)
+
+    exit()
 
 if(OPENAI_BATCH):
     os.makedirs(OPENAI_BATCH_DIR, exist_ok=True)

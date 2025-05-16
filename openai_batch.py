@@ -2,7 +2,7 @@ import os
 
 from openai import OpenAI
 
-BATCH_DIR = "fact_leakage/openai_batches/openai_o3-mini"
+BATCH_DIR = "openai_batches/openai_gpt-4o_disaster"
 
 file_ids = {}
 for f in os.listdir(BATCH_DIR):

@@ -1,6 +1,6 @@
 # The SMeL Test
 
-Code for the forthcoming benchmark paper "The SMeL Test: A simple benchmark for media literacy in language models".
+Code for the forthcoming benchmark paper "The SMeL Test: A simple benchmark for media literacy in language models". Excuse our appearance; this repo is still under construction.
 
 ## Usage
 

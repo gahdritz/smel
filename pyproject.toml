@@ -1,0 +1,16 @@
+[project]
+name            = "smel"
+version         = "1.0.0"
+description     = "Code for the SMeL Test"
+readme          = "README.md"
+requires-python = ">=3.9"
+authors = [
+  { name = "Gustaf Ahdritz", email = "gahdritz@g.harvard.edu" }
+]
+
+[build-system]
+requires      = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["smel"]

@@ -14,7 +14,7 @@ To run the first subtask, configure `evaluate_model_on_questions` and `grade_ans
 
 By default, this runs Llama 3.3 70B on `agency` documents. These settings can be changed with the `--model` and `--entity` flags, respectively. The source pair can be controlled with `--combo_id`.
 
-Finally, run
+Finally, run:
 
 `python3 grade_answers.py`
 

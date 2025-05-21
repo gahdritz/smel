@@ -8,7 +8,7 @@ The SMeL Test currently consists of three subtasks.
 
 ### Ignoring dubious sources
 
-To run the first subtask, configure `evaluate_model_on_questions` and `grade_answers` to only use one set of in-context documents (using the `CONTEXT_FILES` variable). Then, run:
+To run the first subtask, configure `evaluate_model_on_questions.py` and `grade_answers.py` to only use one set of in-context documents (using the `CONTEXT_FILES` variable). Then, run:
 
 `python3 evaluate_model_on_questions.py`
 

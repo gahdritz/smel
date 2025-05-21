@@ -1,4 +1,5 @@
 import argparse
+import datasets
 from itertools import combinations
 import json
 import os
@@ -32,16 +33,11 @@ parser = argparse.ArgumentParser()
 #parser.add_argument("--combo_id", type=int, default=0)
 parser.add_argument("--entity", type=str, default="agency")
 parser.add_argument("--model", type=str, default="llama")
+parser.add_argument("--use_local", action="store_true", default=False)
 args = parser.parse_args()
 
 ENTITY = args.entity
 MODEL = args.model
-
-QUESTION_FILE = f"{ENTITY}_questions_filtered.pickle"
-CONTEXT_FILES = [
-    f"{ENTITY}_questions_filtered_rewritten.pickle",
-#    f"{ENTITY}_questions_filtered_{ENTITY}_questions_filtered_rewritten_corrupted.pickle",
-]
 
 RUN_NAME = f"{ENTITY}_ignoring"
 USE_CONTEXT = True
@@ -55,6 +51,42 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 BATCH_SIZE = 64
 
 model_name = "meta-llama/Llama-3.3-70B-Instruct"
+
+def get_context_keys(no_docs, combo_id):
+    domain_combinations = list(combinations([url for _, url in DOMAINS], no_docs))
+     
+    if(no_docs == 2):
+        domain_combinations = [t for t in domain_combinations if filter_combinations(t)]
+    
+    print(list(enumerate(domain_combinations)))
+    context_keys = list(domain_combinations[combo_id])
+
+    return domain_combinations, context_keys
+
+if(args.use_local):
+    QUESTION_FILE = f"{ENTITY}_questions_filtered.pickle"
+    CONTEXT_FILES = [
+        f"{ENTITY}_questions_filtered_rewritten.pickle",
+        f"{ENTITY}_questions_filtered_{ENTITY}_questions_filtered_rewritten_corrupted.pickle",
+    ]
+    no_docs = len(CONTEXT_FILES)
+
+    with open(os.path.join(PICKLE_DIR, QUESTION_FILE), "rb") as fp:
+        questions = pickle.load(fp)
+   
+    question_file = os.path.basename(QUESTION_FILE).rsplit('.', 1)[0]
+else:
+    CONTEXT_FILES = ["qa_rewritten", "qa_corrupted"]
+    datasets = [datasets.load_dataset("gahdritz/smel", name=c, split="test") for c in CONTEXT_FILES]
+ 
+    no_docs = len(datasets)
+    
+    domain_combinations, context_keys = get_context_keys(no_docs, 0)
+ 
+    for d, context_key in zip(datasets, context_keys):
+        questions = [(None, '\n'.join([e["question"], e["answer"]])) for e in datasets[0] if e["source"] == context_key and e["entity"] == ENTITY]
+
+    question_file = CONTEXT_FILES[0]
 
 # Load the model and tokenizer
 quantization_config = BitsAndBytesConfig(
@@ -72,27 +104,11 @@ pipeline = transformers.pipeline(
     device_map="auto",
 )
 
-with open(os.path.join(PICKLE_DIR, QUESTION_FILE), "rb") as fp:
-    questions = pickle.load(fp)
-
-domain_combinations = list(combinations([url for _, url in DOMAINS], len(CONTEXT_FILES)))
-
-if(len(CONTEXT_FILES) == 2):
-    domain_combinations = [t for t in domain_combinations if filter_combinations(t)]
-
 for combo_id in range(len(domain_combinations)):
     print(f"Combo ID: {combo_id}")
 
-    if(combo_id < 4):
-        print("Skipping...")
-        continue
-
     context_keys = list(domain_combinations[combo_id])
     run_name = f"{'_'.join([URL_TO_NAME[k].lower().replace(' ', '_') for k in context_keys])}_{MODEL}_{RUN_NAME}"
-    
-    question_file = os.path.basename(QUESTION_FILE).rsplit('.', 1)[0]
-    if(USE_CONTEXT):
-        question_file += "_context"
     
     answer_file_name = f"{question_file}_{run_name}.pickle"
     
@@ -123,7 +139,6 @@ for combo_id in range(len(domain_combinations)):
     
     correctness = [o[-1]["content"] for o in output_texts]
     
-    question_file = os.path.basename(QUESTION_FILE).rsplit('.', 1)[0]
     answer_file = os.path.basename(answer_file_name).rsplit('.', 1)[0]
     
     with open(os.path.join(PICKLE_DIR, f"{question_file}_{answer_file}_graded.pickle"), "wb") as fp:
@@ -152,11 +167,13 @@ for combo_id in range(len(domain_combinations)):
     
     ax.grid(axis='y', linestyle='--', alpha=0.7)
     
-    cxt_name = '_'.join([s.rsplit('.', 1)[0] for s in [QUESTION_FILE, *CONTEXT_FILES]])
+    cxt_name = '_'.join([s.rsplit('.', 1)[0] for s in [question_file, *CONTEXT_FILES]])
     fig_dir = os.path.join(FIG_DIR, cxt_name)
     os.makedirs(fig_dir, exist_ok=True)
     fig_name = f"{run_name}.png"
     fig_path = os.path.join(fig_dir, fig_name)
     plt.savefig(fig_path, bbox_inches="tight")
-    
-    print(list(zip(answers, correctness)))
+   
+    print(f"Correct: {fraction_correct}")
+    print(f"Incorrect: {fraction_incorrect}")
+    print(f"Abstentions: {fraction_abstention}")

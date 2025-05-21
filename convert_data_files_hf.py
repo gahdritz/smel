@@ -2,80 +2,114 @@ import json
 import pickle
 import os
 
-# Non-rewritten
-FILES = [
-    "pickles/agency_questions_filtered.pickle",
-    "pickles/crime_questions_filtered.pickle",
-    "pickles/disaster_questions_filtered.pickle",
-]
+from datasets import Dataset, DatasetDict
 
-gt = []
-for FILE in FILES:
+# Non-rewritten
+ENTITIES = ["agency", "crime", "disaster"]
+
+FILES = [f"pickles/{e}_questions_filtered.pickle" for e in ENTITIES]
+
+gt = {}
+for ENTITY, FILE in zip(ENTITIES, FILES):
     with open(FILE, "rb") as fp:
-        gt.extend(pickle.load(fp))
+        gt[ENTITY] = pickle.load(fp)
 
 dic = {
     "passage": [],
     "question": [],
     "answer": [],
+    "entity": [],
 }
 
-for do in gt:
-    dic["passage"].append(do[0])
-    q, a = do[1].split('\n')
-    dic["question"].append(q)
-    dic["answer"].append(a)
+for e in ENTITIES:
+    for do in gt[e]:
+        dic["passage"].append(do[0])
+        q, a = do[1].split('\n')
+        dic["question"].append(q)
+        dic["answer"].append(a)
+        dic["entity"].append(e)
 
-with open("questions.json", "w") as fp:
-    json.dump(dic, fp)
+ds = Dataset.from_dict(dic)
+ds = DatasetDict({"test": ds})
+
+ds.push_to_hub("gahdritz/smel", data_dir="qa/ground_truth")
 
 # Rewritten
-FILES = [
-    "pickles/agency_questions_filtered_rewritten.pickle",
-    "pickles/crime_questions_filtered_rewritten.pickle",
-    "pickles/disaster_questions_filtered_rewritten.pickle",
-]
+FILES = [f"pickles/{e}_questions_filtered_rewritten.pickle" for e in ENTITIES]
 
 d = []
-for FILE in FILES:
+for ENTITY, FILE in zip(ENTITIES, FILES):
     with open(FILE, "rb") as fp:
         f = pickle.load(fp)
 
     keys = list(sorted(f.keys()))
     for k in keys:
         file_list = f[k]
-        d.extend([(g, k, jamba) for g, jamba in zip(gt, f[k])])
+        d.extend([(g, k, ENTITY, do) for g, do in zip(gt[ENTITY], f[k])])
 
 dic = {
     "source": [],
     "passage": [],
     "question": [],
     "answer": [],
+    "entity": [],
 }
 
-for g, k, do in d:
+for g, k, e, do in d:
     dic["source"].append(k)
     dic["passage"].append(do[0])
     a = do[1]
     gt_q, _ = g[1].split('\n')
     dic["question"].append(gt_q)
     dic["answer"].append(a)
+    dic["entity"].append(e)
 
-with open("questions_rewritten.json", "w") as fp:
-    json.dump(dic, fp)
+ds = Dataset.from_dict(dic)
+ds = DatasetDict({"test": ds})
+
+ds.push_to_hub("gahdritz/smel", data_dir="qa/rewritten")
+
+# Corrupted
+FILES = [f"pickles/{e}_questions_filtered_{e}_questions_filtered_rewritten_corrupted.pickle" for e in ENTITIES]
+
+d = []
+for ENTITY, FILE in zip(ENTITIES, FILES):
+    with open(FILE, "rb") as fp:
+        f = pickle.load(fp)
+
+    keys = list(sorted(f.keys()))
+    for k in keys:
+        file_list = f[k]
+        d.extend([(g, k, ENTITY, do) for g, do in zip(gt[ENTITY], f[k])])
+
+dic = {
+    "source": [],
+    "passage": [],
+    "question": [],
+    "answer": [],
+    "entity": [],
+}
+
+for g, k, e, do in d:
+    dic["source"].append(k)
+    dic["passage"].append(do[0])
+    a = do[1]
+    gt_q, _ = g[1].split('\n')
+    dic["question"].append(gt_q)
+    dic["answer"].append(a)
+    dic["entity"].append(e)
+
+ds = Dataset.from_dict(dic)
+ds = DatasetDict({"test": ds})
+
+ds.push_to_hub("gahdritz/smel", data_dir="qa/corrupted")
 
 # Fact list files
-FILES = [
-    "pickles/agency_fact_lists_passages.pickle",
-    "pickles/crime_fact_lists_passages.pickle",
-    "pickles/disaster_fact_lists_passages.pickle",
-]
+FILES = [f"pickles/{e}_fact_lists_passages.pickle" for e in ENTITIES]
 
-FACT_LISTS = [
-    "pickles/agency_fact_lists.pickle",
-    "pickles/crime_fact_lists.pickle",
-    "pickles/disaster_fact_lists.pickle",
-]
+FACT_LISTS = [f"pickles/{e}_fact_lists.pickle" for e in ENTITIES]
+
+ENTITY_FILES = [f"pickles/{e}.pickle" for e in ENTITIES]
 
 fls = []
 for FILE in FACT_LISTS:
@@ -83,6 +117,11 @@ for FILE in FACT_LISTS:
         f = pickle.load(fp)
 
     fls.append(f)
+
+entities = []
+for FILE in ENTITY_FILES:
+    with open(FILE, "rb") as fp:
+        entities.append(pickle.load(fp))
 
 d = []
 for i, FILE in enumerate(FILES):
@@ -92,20 +131,25 @@ for i, FILE in enumerate(FILES):
     keys = list(sorted(f.keys()))
     for k in keys:
         fact_list = fls[i]
+        entity_list = entities[i]
         fact_indices = [fo[-1][0] for fo in f[k]]
         facts = [fact_list[j][k] for j, k in enumerate(fact_indices)]
-        d.extend([(k, fact, fo) for fact, fo in zip(facts, f[k])])
+        d.extend([(k, e, fact, fo) for e, fact, fo in zip(entity_list, facts, f[k])])
 
 dic = {
     "source": [],
-    "passage": [],
+    "entity": [],
     "fact": [],
+    "passage": [],
 }
 
-for k, fact, fo in d:
+for k, e, fact, fo in d:
     dic["source"].append(k)
-    dic["passage"].append(fo[0])
+    dic["entity"].append(e)
     dic["fact"].append(fact)
+    dic["passage"].append(fo[0])
 
-with open("passages.json", "w") as fp:
-    json.dump(dic, fp)
+ds = Dataset.from_dict(dic)
+ds = DatasetDict({"test": ds})
+
+ds.push_to_hub("gahdritz/smel", data_dir="summarization")

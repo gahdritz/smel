@@ -22,8 +22,12 @@ from urllib.parse import urlparse
 from smel.utils.constants import (
     DOMAINS,
     URL_TO_NAME,
-    filter_combinations,
 )
+from smel.utils.utils import (
+    filter_combinations,
+    get_context_keys,
+)
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--combo_id", type=int, default=0)
@@ -50,17 +54,6 @@ PROMPT_DIR = f"{PICKLE_DIR}/{MODEL}_{RUN_NAME}_prompts/"
 
 torch.manual_seed(args.combo_id + 42)
 random.seed(args.combo_id + 43)
-
-def get_context_keys(no_docs, combo_id):
-    domain_combinations = list(combinations([url for _, url in DOMAINS], no_docs))
-     
-    if(no_docs == 2):
-        domain_combinations = [t for t in domain_combinations if filter_combinations(t)]
-    
-    print(list(enumerate(domain_combinations)))
-    context_keys = list(domain_combinations[combo_id])
-
-    return context_keys
 
 
 if(args.use_local):

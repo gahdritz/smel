@@ -33,11 +33,3 @@ UNTRUSTWORTHY = set([
     "https://fanfiction.net",
     "unknown",
 ])
-
-def filter_combinations(t):
-    assert(all([e in TRUSTWORTHY or e in UNTRUSTWORTHY for e in t]))
-    assert(len(t) == 2)
-    if(t[0] in TRUSTWORTHY):
-        return t[1] in UNTRUSTWORTHY
-    else:
-        return t[1] in TRUSTWORTHY

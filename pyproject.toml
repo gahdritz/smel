@@ -7,6 +7,18 @@ requires-python = ">=3.9"
 authors = [
   { name = "Gustaf Ahdritz", email = "gahdritz@g.harvard.edu" }
 ]
+dependencies = [
+    "torch",
+    "openai",
+    "anthropic",
+    "google",
+    "transformers",
+    "datasets",
+    "matplotlib",
+    "ninja",
+    "wheel",
+    "setuptools"
+] 
 
 [build-system]
 requires      = ["setuptools>=69", "wheel"]

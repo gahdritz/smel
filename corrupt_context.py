@@ -125,7 +125,7 @@ for context_key, context_list in contexts.items():
         )
         output_texts = [o[0]["generated_text"] for o in outputs]
     
-        corrupted.extend([(o[-1]["content"], f"{q} \n{ic}") for o, ic, q in zip(output_texts, incorrect_facts, accum["q"])])
+        corrupted.extend([(o[-1]["content"], ic) for o, ic in zip(output_texts, incorrect_facts)])
 
         accum = {}
 

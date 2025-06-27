@@ -18,8 +18,8 @@ dependencies = [
     "ninja",
     "wheel",
     "setuptools",
-    "sentence-transformers",
     "accelerate",
+    "google-api-python-client",
     "bitsandbytes"
 ] 
 

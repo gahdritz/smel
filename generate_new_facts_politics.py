@@ -82,22 +82,37 @@ detail_types = {
     "shirt": ["red", "blue", "yellow", "orange", "pink", "green", "purple"], 
 }
 
+detail_questions = {
+    "watch": lambda p: f"What type of watch was {p} wearing?",
+    "shirt": lambda p: f"What color shirt was {p} wearing?"
+}
+
 updated_true_text = []
 updated_false_text = []
+true_source = []
+false_source = []
+true_facts = []
+false_facts = []
+questions = []
+
 for idx, row in df.iterrows():
     print(idx)
     fake_news = row['fake_text']
     real_news = row['true_text']
+
+    context = row['fake_text']+row['true_text'] #Unique identifier for this pair
 
     fact_type = random.choice(list(detail_types.keys()))
 
     true_fact = random.choice(detail_types[fact_type])
     fake_fact = random.choice(detail_types[fact_type])
 
-    while fake_fact != true_fact:
+    while fake_fact == true_fact:
         fake_fact = random.choice(detail_types[fact_type])
 
     print(names_in_articles[idx][0]+" was wearing a "+ true_fact+" "+ fact_type)
+
+    question = detail_questions[fact_type](names_in_articles[idx][0])
 
     messages = [
         {"role": "system", "content": "You are an assistant that edits existing news articles that are missing a specific fact. Given an article, and a missing fact, add in the missing fact to the article such that it does not sound out of place, and maintains a consistent journalistic style. Only output the revised article."},
@@ -131,11 +146,22 @@ for idx, row in df.iterrows():
     # print(updated_text)
     updated_false_text.append(updated_text)
 
+    true_source.append("https://reuters.com/")
+    false_source.append("unknown")
+    questions.append(question)
+
+    true_facts.append(f'{names_in_articles[idx][0]} was wearing a {true_fact} {fact_type}')
+    false_facts.append(f'{names_in_articles[idx][0]} was wearing a {fake_fact} {fact_type}')
+
 
 df["main_name"] = names_in_articles
 df["updated_true_text"] = updated_true_text
 df["updated_false_text"] = updated_false_text
-
+df['url_true'] = true_source
+df['url_false'] = false_source
+df['true_facts'] = true_facts
+df['false_facts'] = false_facts
+df['questions'] = questions
 df.to_csv("Updated_Matched_Articles__Full_Sample_of_1000__Score___0_7_.csv", index=False)
 
 # Save the DataFrame as a Pickle file

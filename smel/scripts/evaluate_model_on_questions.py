@@ -7,7 +7,7 @@ import random
 
 import anthropic
 import datasets
-from google import genai as google_genai
+import google.generativeai as google_genai
 from google.api_core import exceptions
 import openai
 import torch

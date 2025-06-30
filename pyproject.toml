@@ -20,6 +20,7 @@ dependencies = [
     "setuptools",
     "accelerate",
     "google-api-python-client",
+    "google-generativeai",
     "bitsandbytes"
 ] 
 

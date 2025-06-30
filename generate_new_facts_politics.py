@@ -127,7 +127,7 @@ for idx, row in df.iterrows():
     )
 
     updated_text = [o[0]["generated_text"][-1]["content"] for o in outputs]
-    print(updated_text)
+    # print(updated_text)
     updated_true_text.append(updated_text)
 
     messages = [
@@ -138,13 +138,14 @@ for idx, row in df.iterrows():
     outputs = pipeline(
         [messages],
         temperature=1.0,
-        batch_size=1000,
-        max_new_tokens=50,
+        batch_size=64,
+        max_new_tokens=1000,
     )
 
     updated_text = [o[0]["generated_text"][-1]["content"] for o in outputs]
     # print(updated_text)
     updated_false_text.append(updated_text)
+    print(updated_text)
 
     true_source.append("https://reuters.com/")
     false_source.append("unknown")

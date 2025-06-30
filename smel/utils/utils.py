@@ -18,13 +18,13 @@ def filter_combinations(t):
 
 def get_context_keys(no_docs, combo_id):
     domain_combinations = list(combinations([url for _, url in DOMAINS], no_docs))
-     
+    
     if(no_docs == 2):
         domain_combinations = [t for t in domain_combinations if filter_combinations(t)]
     
     context_keys = list(domain_combinations[combo_id])
 
-    print(list(enumerate(domain_combinations)))
-    print(context_keys)
+    print("Domain combinations: ", list(enumerate(domain_combinations)))
+    print("Context keys: ", context_keys)
 
     return context_keys

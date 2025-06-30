@@ -16,7 +16,7 @@ Please perform the following steps to identify similar article pairs, applying o
 
 ### **Similarity Matching Workflow**
 
-1. **Randomly sample 4,000 articles** from the cleaned `Fake.csv` in increments of 500 without repetition.
+1. **Randomly sample 5,000 articles** from the cleaned `Fake.csv` in increments of 500 without repetition.
 
 2. For each sampled fake article:
 
@@ -50,7 +50,7 @@ Please perform the following steps to identify similar article pairs, applying o
 
 ### **Table creation**
 
-Output a table named "Matched Articles (Full Sample of 4000, Score > 0.7)" with the following columns:
+Output a table named "Matched Articles (Full Sample of 5000, Score > 0.7)" with the following columns:
 
 `fake_title`, `fake_text`, `fake_date`, `true_title`, `true_text`, `true_date`, `similarity_score`
 

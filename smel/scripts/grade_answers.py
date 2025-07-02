@@ -15,9 +15,12 @@ from transformers import (
 )
 from urllib.parse import urlparse
 
-from constants import (
+from smel.utils.constants import (
     DOMAINS,
     URL_TO_NAME,
+)
+
+from smel.utils.utils import (
     filter_combinations,
 )
 
@@ -30,7 +33,7 @@ def parse_question(question):
 
 
 parser = argparse.ArgumentParser()
-#parser.add_argument("--combo_id", type=int, default=0)
+# parser.add_argument("--combo_id", type=int, default=0)
 parser.add_argument("--entity", type=str, default="agency")
 parser.add_argument("--model", type=str, default="llama")
 parser.add_argument("--use_local", action="store_true", default=False)
@@ -73,6 +76,9 @@ if(args.use_local):
 
     with open(os.path.join(PICKLE_DIR, QUESTION_FILE), "rb") as fp:
         questions = pickle.load(fp)
+
+    domain_combinations, context_keys = get_context_keys(no_docs, 0)
+    print(domain_combinations, context_keys)
    
     question_file = os.path.basename(QUESTION_FILE).rsplit('.', 1)[0]
 else:

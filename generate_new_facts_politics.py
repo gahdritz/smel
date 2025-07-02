@@ -53,7 +53,8 @@ pipeline = transformers.pipeline(
 # Real political news
 political_prompts = []
 political_data = []
-df = pd.read_csv("Matched_Articles__Full_Sample_of_1000__Score___0_7_.csv") 
+data_name = "Matched_Articles_Deduplicated_5000samples_score0.7"
+df = pd.read_csv(f"{data_name}.csv") 
 names_in_articles = []
 
 for idx, row in df.iterrows():
@@ -163,7 +164,7 @@ df['url_false'] = false_source
 df['true_facts'] = true_facts
 df['false_facts'] = false_facts
 df['questions'] = questions
-df.to_csv("Updated_Matched_Articles__Full_Sample_of_1000__Score___0_7_.csv", index=False)
+df.to_csv(f'Updated_{data_name}.csv', index=False)
 
 # Save the DataFrame as a Pickle file
-df.to_pickle('Updated_Matched_Articles__Full_Sample_of_1000__Score___0_7_.pkl')
+df.to_pickle(f'Updated_{data_name}.pkl')

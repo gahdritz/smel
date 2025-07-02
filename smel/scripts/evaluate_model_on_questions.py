@@ -42,7 +42,7 @@ MODEL = args.model
 
 WRITE_TO_DISK = False
 C4_JSONL = None
-C4_JSONL = "scratch/c4-0000.json"
+C4_JSONL = "smel/data/c4-0000.json"
 NO_C4_DOCUMENTS = 14
 #NO_C4_DOCUMENTS = 0
 OPENAI_BATCH = False
@@ -67,7 +67,7 @@ if(args.use_local):
     with open(os.path.join(PICKLE_DIR, QUESTION_FILE), "rb") as fp:
         questions = pickle.load(fp)
    
-    context_keys = get_context_keys(no_docs, args.combo_id)
+    context_keys = get_context_keys(no_docs, args.combo_id) #For using built in combinations
 
     context_files = []
     for context_file, context_key in zip(CONTEXT_FILES, context_keys):
@@ -170,6 +170,7 @@ if(C4_JSONL is not None):
     c4_documents = [json.loads(j) for j in jsons]
 
 def parse_question(question):
+    print(question)
     q, a = question.split('\n')
     q = q.strip()
     a = a.strip()

@@ -9,8 +9,8 @@ from transformers import (
 )
 
 PICKLE_DIR = "pickles"
-QUESTION_FILE = "disaster_questions_filtered.pickle"
-CONTEXT_FILE = "disaster_questions_filtered_rewritten.pickle"
+QUESTION_FILE = "agency_questions_filtered.pickle"
+CONTEXT_FILE = "agency_questions_filtered_rewritten.pickle"
 RESUME = False
 
 BATCH_SIZE = 1600

@@ -1,5 +1,5 @@
 ### **Enhanced Prompt with Performance Optimizations**
-
+CSV Files were collected from: https://www.kaggle.com/datasets/emineyetm/fake-news-detection-datasets
 I have two CSV files: `Fake.csv` and `True.csv`, each containing news articles with the columns: `title`, `text`, `date`, and `subject`.
 
 Please perform the following steps to identify similar article pairs, applying optimizations to improve processing efficiency and scalability:

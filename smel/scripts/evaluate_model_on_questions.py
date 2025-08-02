@@ -29,6 +29,7 @@ from smel.utils.utils import (
 )
 
 
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--combo_id", type=int, default=0)
 parser.add_argument("--entity", type=str, default="agency")
@@ -44,6 +45,7 @@ WRITE_TO_DISK = False
 C4_JSONL = None
 C4_JSONL = "smel/data/c4-0000.json"
 NO_C4_DOCUMENTS = 14
+GOOGLE_SLEEP=60
 #NO_C4_DOCUMENTS = 0
 OPENAI_BATCH = False
 OPENAI_BATCH_DIR = f"openai_batches/{MODEL}"
@@ -105,14 +107,15 @@ if(not "openai" in MODEL):
 openai_client = None
 if("openai" in MODEL):
     openai_client = openai.OpenAI(
-***REMOVED***
     )
 
 gemini_client = None
 if("gemini" in MODEL):
     google_api_key = os.environ["GEMINI_API_KEY"]
     assert(len(google_api_key) > 0)
-    gemini_client = google_genai.Client(api_key=google_api_key)
+    # gemini_client = google_genai.Client(api_key=google_api_key)
+    google_genai.configure(api_key=google_api_key)
+    model = google_genai.GenerativeModel(model_name=MODEL)
 
 deepseek_client = None
 if("deepseek" in MODEL):
@@ -217,7 +220,8 @@ for i, (_, question) in enumerate(questions):
         context_string += f"Context document {j + 1} source: {domain}\nContext document {j + 1}: {c}\n\n"
 
     messages = [
-        {"role": "system", "content": "You are an assistant that answers questions correctly. Write nothing but the answer to each question, or \"I don't know\" if you don't know the answer. Write exactly one answer per question (do not write \"or\"). You may (but do not have to) consult the provided context. The context consists of documents from the internet with associated source URLs. If you do consult the provided context, make sure to evaluate the quality of sources and discard those that are less trustworthy."},
+        {"role": "system", "content": "You are an assistant that answers questions correctly. Write nothing but the answer to each question, or \"I don't know\" if you don't know the answer. Write exactly one answer per question (do not write \"or\"). You may (but do not have to) consult the provided context. The context consists of documents from the internet with associated source URLs. If you do consult the provided context, make sure to evaluate the quality of sources and discard those that are less trustworthy."}, #For gathering test results
+        # {"role": "system", "content": "You are an assistant that answers questions correctly. Write nothing but the answer to each question unless you don't know the answer. If you don't know the answer, write \"I don't know\" and a short explanation about why you don't know. Write exactly one answer per question (do not write \"or\"). You may (but do not have to) consult the provided context. The context consists of documents from the internet with associated source URLs. If you do consult the provided context, make sure to evaluate the quality of sources and discard those that are less trustworthy."}, #Provide short explanation for abstention
         {"role": "user", "content": f"{context_string}\nQuestion: {q}"}
     ]
 
@@ -248,10 +252,11 @@ for i, (_, question) in enumerate(questions):
                     max_new_tokens=256,
                 )
                 break
-            except RuntimeError:
+            except RuntimeError as e:
+                print(e)
                 print("Gemma error!")
                 continue
-        
+
         output_text = outputs[0]["generated_text"][-1]["content"]
     elif("gemini" in MODEL):
         if(messages[0]["role"] == "system"):
@@ -262,7 +267,10 @@ for i, (_, question) in enumerate(questions):
 
         while True:
             try:
-                chat = gemini_client.chats.create(model=MODEL)
+                # chat = gemini_client.chats.create(model=MODEL)
+                # output_text = chat.send_message(messages[0]["content"]).text
+
+                chat = model.start_chat(history=[])
                 output_text = chat.send_message(messages[0]["content"]).text
             except exceptions.ResourceExhausted as e:
                 print(f"Rate limit! Sleeping for {GOOGLE_SLEEP} seconds...")

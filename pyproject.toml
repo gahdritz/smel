@@ -1,0 +1,32 @@
+[project]
+name            = "smel"
+version         = "1.0.0"
+description     = "Code for the SMeL Test"
+readme          = "README.md"
+requires-python = ">=3.9"
+authors = [
+  { name = "Gustaf Ahdritz", email = "gahdritz@g.harvard.edu" }
+]
+dependencies = [
+    "torch",
+    "openai",
+    "anthropic",
+    "google",
+    "transformers",
+    "datasets",
+    "matplotlib",
+    "ninja",
+    "wheel",
+    "setuptools",
+    "accelerate",
+    "google-api-python-client",
+    "google-generativeai",
+    "bitsandbytes"
+] 
+
+[build-system]
+requires      = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["smel"]

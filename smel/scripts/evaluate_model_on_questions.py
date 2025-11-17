@@ -253,7 +253,7 @@ for i, (_, _, question) in enumerate(gens):
 
         while True:
             try:
-                chat = gemini_client.chats.create(args.model=args.model)
+                chat = gemini_client.chats.create(model=args.model)
                 output_text = chat.send_message(messages[0]["content"]).text
             except exceptions.ResourceExhausted as e:
                 print(f"Rate limit! Sleeping for {GOOGLE_SLEEP} seconds...")
@@ -266,14 +266,14 @@ for i, (_, _, question) in enumerate(gens):
             break
     elif("openai" in args.model):
         assert('_' in args.model)
-        openai_args.model = args.model.split('_')[-1]
+        openai_model = args.model.split('_')[-1]
         for m in messages:
                 if(m["role"] == "system"):
                     m["role"] = "developer"
 
         if(not args.openai_batch):
             completion = openai_client.chat.completions.create(
-                args.model=openai_args.model,
+                model=openai_model,
                 messages=messages,
             )
             output_text = completion.choices[0].message.content
@@ -283,7 +283,7 @@ for i, (_, _, question) in enumerate(gens):
                 "method": "POST",
                 "url": "/v1/chat/completions",
                 "body": {
-                    "args.model": openai_args.model,
+                    "model": openai_model,
                     "messages": messages,
                 }
             }
@@ -291,7 +291,7 @@ for i, (_, _, question) in enumerate(gens):
             continue
     elif("deepseek" in args.model):
         completion = deepseek_client.chat.completions.create(
-            args.model=args.model,
+            model=args.model,
             messages=messages,
             stream=False,
         )
@@ -304,7 +304,7 @@ for i, (_, _, question) in enumerate(gens):
             messages = messages[1:]
 
         message = claude_client.messages.create(
-            args.model=args.model,
+            model=args.model,
             max_tokens=128,
             temperature=1,
             system=system,

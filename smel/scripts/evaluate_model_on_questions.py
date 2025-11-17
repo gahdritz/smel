@@ -155,8 +155,8 @@ if(args.model in hf_names):
         device_map="auto",
     )
 
-if(C4_JSONL is not None):
-    with open(C4_JSONL, "r") as fp:
+if(args.c4_jsonl is not None):
+    with open(args.c4_jsonl, "r") as fp:
         jsons = fp.readlines()
 
     c4_documents = [json.loads(j) for j in jsons]
@@ -190,8 +190,8 @@ for i, (_, _, question) in enumerate(gens):
         context = context_file[i]
         context_tups.append((context, context_key))
     
-    if(C4_JSONL is not None and NO_C4_DOCUMENTS > 0):
-        c4_sample = random.sample(c4_documents, NO_C4_DOCUMENTS)
+    if(args.c4_jsonl is not None and args.no_c4_documents > 0):
+        c4_sample = random.sample(c4_documents, args.no_c4_documents)
         context_tups.extend([((s["text"][:1000], None), s["metadata"]["url"]) for s in c4_sample])
     
     ct = list(enumerate(context_tups))

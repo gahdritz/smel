@@ -31,22 +31,22 @@ from smel.utils.utils import (
 parser = argparse.ArgumentParser()
 parser.add_argument("--combo_id", type=int, default=0)
 parser.add_argument("--entity", type=str, default="agency")
-parser.add_argument("--args.model", type=str, default="llama")
+parser.add_argument("--model", type=str, default="llama")
 parser.add_argument("--stop_after_k", type=int, default=None)
 parser.add_argument("--use_local", action="store_true", default=False)
-parser.add_argument("--args.write_to_disk", action="store_true", default=False)
+parser.add_argument("--write_to_disk", action="store_true", default=False)
 parser.add_argument("--c4_jsonl", type=str, default="smel/data/c4-0000.json")
 parser.add_argument("--no_c4_documents", type=int, default=14)
-parser.add_argument("--args.openai_batch", action="store_true", default=False)
-parser.add_argument("--args.run_suffix", type=str, default="")
-parser.add_argument("--args.openai_batch_dir", type=str, default="args.openai_batches")
-parser.add_argument("--args.pickle_dir", type=str, default="pickles")
+parser.add_argument("--openai_batch", action="store_true", default=False)
+parser.add_argument("--run_suffix", type=str, default="")
+parser.add_argument("--openai_batch_dir", type=str, default="openai_batches")
+parser.add_argument("--pickle_dir", type=str, default="pickles")
 args = parser.parse_args()
 
 GOOGLE_SLEEP=60
 RUN_NAME = f"{args.entity}{args.run_suffix}"
 
-args.openai_batch_dir = f"{args.args.openai_batch_dir}/{args.model}{args.run_suffix}"
+args.openai_batch_dir = f"{args.openai_batch_dir}/{args.model}{args.run_suffix}"
 
 OUTPUT_DIR = f"{args.pickle_dir}/{args.model}_{RUN_NAME}/"
 PROMPT_DIR = f"{args.pickle_dir}/{args.model}_{RUN_NAME}_prompts/"
